@@ -8,8 +8,8 @@ import { sendToTelegram, sendBulkToTelegram } from './utils/telegram';
 import {
   makeSearchKey, storageEngine,
   hasSearch, saveSearchRecord, saveLeads,
-  getAllLeads, updateLead, clearAll,
-  getSearchHistory, deleteSearchRecord,
+  getAllLeadsMerged, updateLead, clearAll,
+  getSearchHistoryMerged, getSearchHistory, deleteSearchRecord,
 } from './utils/storage-engine';
 import type { SavedSearch } from './utils/storage-engine';
 import { SearchPanel }      from './components/SearchPanel';
@@ -54,8 +54,8 @@ export default function App() {
   useEffect(() => {
     if (!authed) return;
     Promise.all([
-      getAllLeads().catch(() => [] as Lead[]),
-      getSearchHistory().catch(() => [] as SavedSearch[]),
+      getAllLeadsMerged().catch(() => [] as Lead[]),
+      getSearchHistoryMerged().catch(() => [] as SavedSearch[]),
     ]).then(([rows, hist]) => {
       setLeads(rows.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
       setSearchHistory(hist);
@@ -93,7 +93,7 @@ export default function App() {
       /* حفظ (upsert — لا تكرار في قاعدة البيانات) */
       await saveLeads(found, searchKey, countryCode, cityAr);
       await saveSearchRecord(searchKey, found.length, { query: params.query, countryCode, countryAr, cityAr, cityEn });
-      getSearchHistory().then(h => setSearchHistory(h)).catch(() => {});
+      getSearchHistoryMerged().then(h => setSearchHistory(h)).catch(() => {});
 
       /* تحديث الواجهة */
       setLeads(prev => mergeLeads(brandNew, prev));
@@ -113,7 +113,7 @@ export default function App() {
   async function handleDeleteSearch(searchKey: string) {
     await deleteSearchRecord(searchKey);
     setSearchHistory(prev => prev.filter(s => s.searchKey !== searchKey));
-    getAllLeads().then(rows =>
+    getAllLeadsMerged().then(rows =>
       setLeads(rows.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()))
     ).catch(() => {});
   }

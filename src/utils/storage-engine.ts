@@ -67,6 +67,41 @@ export async function getAllLeads(): Promise<Lead[]> {
   return trySupabase(() => sb_getAllLeads(), () => idb_getAll());
 }
 
+/**
+ * يقرأ من Supabase + IndexedDB معاً ويدمجهما.
+ * يُستخدم عند بداية التطبيق لضمان ظهور كل البيانات
+ * حتى لو الرفع لم يتم بعد.
+ */
+export async function getAllLeadsMerged(): Promise<Lead[]> {
+  const [cloudResult, localResult] = await Promise.allSettled([
+    sb_getAllLeads(),
+    idb_getAll(),
+  ]);
+  const cloud = cloudResult.status === 'fulfilled' ? cloudResult.value : [];
+  const local = localResult.status === 'fulfilled' ? localResult.value : [];
+
+  // دمج بدون تكرار (Cloud له الأولوية)
+  const cloudIds = new Set(cloud.map(l => l.id));
+  const merged   = [...cloud, ...local.filter(l => !cloudIds.has(l.id))];
+  return merged.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+}
+
+/**
+ * يقرأ سجلات البحث من المصدرين ويدمجهما.
+ */
+export async function getSearchHistoryMerged(): Promise<SavedSearch[]> {
+  const [cloudResult, localResult] = await Promise.allSettled([
+    sb_getSearchHistory(),
+    idb_getHistory(),
+  ]);
+  const cloud = cloudResult.status === 'fulfilled' ? cloudResult.value : [];
+  const local = localResult.status === 'fulfilled' ? localResult.value : [];
+
+  const cloudKeys = new Set(cloud.map(s => s.searchKey));
+  const merged    = [...cloud, ...local.filter(s => !cloudKeys.has(s.searchKey))];
+  return merged.sort((a, b) => b.timestamp - a.timestamp);
+}
+
 export async function updateLead(id: string, updates: Partial<Lead>): Promise<void> {
   await trySupabase(() => sb_updateLead(id, updates), () => idb_update(id, updates));
 }
