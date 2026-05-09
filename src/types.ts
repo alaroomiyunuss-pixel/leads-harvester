@@ -55,6 +55,8 @@ export interface SearchParams {
   cityEn: string;
   radius: number;
   maxResults: number;
+  cityLat?: number;
+  cityLng?: number;
 }
 
 export interface Stats {

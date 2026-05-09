@@ -71,7 +71,7 @@ export default function App() {
   /* ── بحث جديد ── */
   async function handleSearch(params: SearchParams) {
     const { countryCode, countryAr, cityAr, cityEn } = params;
-    const searchKey = makeSearchKey(params.query, countryCode, cityEn);
+    const searchKey = makeSearchKey(params.query, countryCode, cityEn, params.maxResults, params.radius);
     setIsLoading(true); setError(''); setSearchInfo(''); setTab('dashboard');
     try {
       /* مخبَّأ سابقاً؟ حمّله فوراً */

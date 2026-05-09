@@ -45,8 +45,17 @@ function tx(
   return db.transaction(stores, mode);
 }
 
-export function makeSearchKey(query: string, countryCode: string, cityEn: string): string {
-  return `${query.trim().toLowerCase()}|${countryCode.toLowerCase()}|${cityEn.trim().toLowerCase()}`;
+export function makeSearchKey(
+  query: string, countryCode: string, cityEn: string,
+  maxResults: number, radius: number
+): string {
+  return [
+    query.trim().toLowerCase(),
+    countryCode.toLowerCase(),
+    cityEn.trim().toLowerCase(),
+    maxResults,
+    radius,
+  ].join('|');
 }
 
 export async function hasSearch(searchKey: string): Promise<boolean> {

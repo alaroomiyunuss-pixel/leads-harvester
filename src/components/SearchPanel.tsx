@@ -30,7 +30,17 @@ export function SearchPanel({ onSearch, isLoading, hasApiKey, lastFromCache }: S
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!canSubmit) return;
-    onSearch({ query: query.trim(), countryCode, countryAr: selectedCountry!.ar, cityAr: selectedCity!.ar, cityEn, radius, maxResults });
+    onSearch({
+      query: query.trim(),
+      countryCode,
+      countryAr: selectedCountry!.ar,
+      cityAr: selectedCity!.ar,
+      cityEn,
+      radius,
+      maxResults,
+      cityLat: selectedCity!.lat,
+      cityLng: selectedCity!.lng,
+    });
   }
 
   return (

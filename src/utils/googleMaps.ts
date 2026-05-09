@@ -31,6 +31,10 @@ const FIELDS = [
   'nextPageToken',
 ].join(',');
 
+interface LocationBias {
+  circle: { center: { latitude: number; longitude: number }; radius: number };
+}
+
 export function parseGoogleError(status: string, message?: string): string {
   const map: Record<string, string> = {
     REQUEST_DENIED:   `❌ تم رفض الطلب:\n• فعّل "Places API (New)" في Google Cloud Console\n• فعّل الفوترة (Billing)\n• تحقق من صلاحيات المفتاح`,
@@ -44,9 +48,11 @@ export function parseGoogleError(status: string, message?: string): string {
 }
 
 async function fetchPage(
-  textQuery: string, apiKey: string, pageSize: number, pageToken?: string
+  textQuery: string, apiKey: string, pageSize: number,
+  locationBias?: LocationBias, pageToken?: string
 ): Promise<TextSearchResponse> {
   const body: Record<string, unknown> = { textQuery, maxResultCount: pageSize, languageCode: 'ar' };
+  if (locationBias) body.locationBias = locationBias;
   if (pageToken) body.pageToken = pageToken;
 
   const res = await fetch(`${BASE}/places:searchText`, {
@@ -66,12 +72,14 @@ async function fetchPage(
 }
 
 // Fetch all pages for a single query (up to limit)
-async function fetchAllPages(textQuery: string, apiKey: string, limit: number): Promise<PlaceNew[]> {
+async function fetchAllPages(
+  textQuery: string, apiKey: string, limit: number, locationBias?: LocationBias
+): Promise<PlaceNew[]> {
   const all: PlaceNew[] = [];
   let pageToken: string | undefined;
   let remaining = limit;
   do {
-    const data = await fetchPage(textQuery, apiKey, Math.min(20, remaining), pageToken);
+    const data = await fetchPage(textQuery, apiKey, Math.min(20, remaining), locationBias, pageToken);
     all.push(...(data.places || []));
     remaining -= data.places?.length || 0;
     pageToken = data.nextPageToken;
@@ -82,7 +90,12 @@ async function fetchAllPages(textQuery: string, apiKey: string, limit: number): 
 
 // Deep Search: 10 query variants → 100+ unique results
 export async function searchPlaces(params: SearchParams, apiKey: string): Promise<Lead[]> {
-  const { query, cityEn, countryCode, cityAr, maxResults } = params;
+  const { query, cityEn, countryCode, cityAr, maxResults, radius, cityLat, cityLng } = params;
+
+  /* locationBias: يُقيّد النتائج بدائرة حول المدينة */
+  const locationBias: LocationBias | undefined = (cityLat && cityLng)
+    ? { circle: { center: { latitude: cityLat, longitude: cityLng }, radius } }
+    : undefined;
 
   // Build 10 query variants for maximum coverage
   const variants = [
@@ -106,7 +119,7 @@ export async function searchPlaces(params: SearchParams, apiKey: string): Promis
   for (let i = 0; i < variants.length && allPlaces.length < maxResults; i += batchSize) {
     const batch = variants.slice(i, i + batchSize);
     const results = await Promise.allSettled(
-      batch.map(q => fetchAllPages(q, apiKey, 20))
+      batch.map(q => fetchAllPages(q, apiKey, 20, locationBias))
     );
     for (const result of results) {
       if (result.status === 'fulfilled') {
