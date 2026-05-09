@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Key, Send, Eye, EyeOff, CheckCircle, ExternalLink, Info, Flame, Database } from 'lucide-react';
 import type { AppSettings } from '../types';
 import { storageEngine } from '../utils/storage-engine';

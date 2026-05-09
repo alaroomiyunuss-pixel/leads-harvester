@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Search, Sliders, Zap, AlertCircle, Database } from 'lucide-react';
 import { motion } from 'framer-motion';
 import type { SearchParams } from '../types';

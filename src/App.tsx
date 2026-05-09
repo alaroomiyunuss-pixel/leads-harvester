@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState, useEffect } from 'react';
+import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { LayoutDashboard, Search, Settings as SettingsIcon, Zap, BarChart3, Database, Flame } from 'lucide-react';
 import type { Lead, AppSettings, SearchParams } from './types';
 import { loadSettings, saveSettings } from './utils/storage';
@@ -23,9 +23,9 @@ import './index.css';
 
 type Tab = 'dashboard' | 'analytics' | 'search' | 'settings';
 
-const TAB_VARIANTS = {
+const TAB_VARIANTS: Variants = {
   initial: { opacity: 0, y: 12 },
-  animate: { opacity: 1, y: 0, transition: { duration: 0.22, ease: 'easeOut' } },
+  animate: { opacity: 1, y: 0, transition: { duration: 0.22, ease: 'easeOut' as const } },
   exit:    { opacity: 0, y: -8, transition: { duration: 0.15 } },
 };
 
@@ -92,13 +92,7 @@ export default function App() {
   async function handleDeleteSearch(searchKey: string) {
     await deleteSearchRecord(searchKey);
     setSearchHistory(prev => prev.filter(s => s.searchKey !== searchKey));
-    // Remove those leads from state too
-    setLeads(prev => prev.filter(l => {
-      // Keep leads that belong to other searches (we don't track searchKey in Lead state,
-      // so we just refresh everything from DB)
-      return true;
-    }));
-    // Refresh leads from DB
+    // Refresh leads from DB (re-fetch everything to reflect deletion)
     getAllLeads().then(rows =>
       setLeads(rows.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()))
     ).catch(() => {});

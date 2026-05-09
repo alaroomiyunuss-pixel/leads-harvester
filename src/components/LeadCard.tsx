@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Phone, MapPin, Star, Globe, Send, CheckCircle, Tag, MessageCircle, Mail, Map, ChevronDown, Brain, Edit3, User } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Lead, LeadStatus } from '../types';

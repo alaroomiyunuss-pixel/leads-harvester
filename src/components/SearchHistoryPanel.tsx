@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { History, RefreshCw, Trash2, MapPin, Users, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { SavedSearch } from '../utils/db';

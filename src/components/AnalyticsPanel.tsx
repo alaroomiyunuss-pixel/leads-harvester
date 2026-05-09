@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { TrendingUp, DollarSign, Users, Award } from 'lucide-react';
 import { motion } from 'framer-motion';
 import type { Lead } from '../types';

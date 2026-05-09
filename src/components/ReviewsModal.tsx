@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { X, Brain, Copy, CheckCircle, Star } from 'lucide-react';
 import type { Lead } from '../types';
 

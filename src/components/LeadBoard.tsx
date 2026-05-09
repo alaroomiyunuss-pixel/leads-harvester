@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Users, Filter, Send, Trash2, Download, SortAsc } from 'lucide-react';
 import { motion } from 'framer-motion';
 import type { Lead } from '../types';
