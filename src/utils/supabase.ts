@@ -13,7 +13,9 @@ function toRow(lead: Lead, searchKey: string) {
     id: lead.id, name: lead.name, phone: lead.phone ?? null,
     email: lead.email ?? null, address: lead.address ?? null,
     rating: lead.rating ?? null, review_count: lead.reviewCount ?? null,
-    reviews: lead.reviews ?? null, category: lead.category ?? null,
+    // reviews مخزنة كـ JSON string لتجنب مشاكل التوافق مع أنواع الأعمدة
+    reviews: lead.reviews ? JSON.stringify(lead.reviews) : null,
+    category: lead.category ?? null,
     website: lead.website ?? null, google_maps_url: lead.googleMapsUrl ?? null,
     status: lead.status, assignee: lead.assignee ?? null,
     notes: lead.notes ?? null, delivery_url: lead.deliveryUrl ?? null,
@@ -31,7 +33,9 @@ function fromRow(row: Record<string, unknown>): Lead {
     address: row.address as string | undefined,
     rating: row.rating as number | undefined,
     reviewCount: row.review_count as number | undefined,
-    reviews: row.reviews as string[] | undefined,
+    reviews: row.reviews
+      ? (typeof row.reviews === 'string' ? JSON.parse(row.reviews) : row.reviews) as string[]
+      : undefined,
     category: row.category as string | undefined,
     website: row.website as string | undefined,
     googleMapsUrl: row.google_maps_url as string | undefined,

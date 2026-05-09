@@ -177,11 +177,18 @@ export async function migrateLocalToCloud(
   }
 
   let done = 0;
+  let firstError: string | null = null;
   for (const [key, leads] of byKey) {
-    await sb_saveLeads(leads as Lead[], key).catch(() => {});
+    try {
+      await sb_saveLeads(leads as Lead[], key);
+    } catch (e) {
+      firstError = firstError ?? (e instanceof Error ? e.message : String(e));
+    }
     done += leads.length;
     onProgress?.(done, newLeads.length, `جارٍ رفع العملاء... (${done}/${newLeads.length})`);
   }
+
+  if (firstError) throw new Error(`فشل رفع العملاء: ${firstError}`);
 
   onProgress?.(done, newLeads.length, 'جارٍ رفع سجلات البحث...');
   for (const s of localSearches) {

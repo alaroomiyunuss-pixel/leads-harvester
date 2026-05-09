@@ -39,8 +39,9 @@ export function SettingsPanel() {
         setMigrateMsg(`✅ تم رفع ${result.leads} عميل و${result.searches} بحث إلى السحابة${result.skipped > 0 ? ` (${result.skipped} موجود مسبقاً)` : ''}`);
       }
       setMigrateOk(true);
-    } catch {
-      setMigrateMsg('❌ فشل الرفع — تحقق من اتصال الإنترنت');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setMigrateMsg(`❌ ${msg}`);
     } finally { setMigrating(false); }
   }
 
