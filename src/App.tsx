@@ -2,7 +2,7 @@ import { useState, useEffect, type ElementType } from 'react';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { LayoutDashboard, Search, Settings as SettingsIcon, Zap, BarChart3, Database, Cloud } from 'lucide-react';
 import type { Lead, AppSettings, SearchParams } from './types';
-import { loadSettings, saveSettings } from './utils/storage';
+import { loadSettings } from './utils/storage';
 import { searchPlaces } from './utils/googleMaps';
 import { sendToTelegram, sendBulkToTelegram } from './utils/telegram';
 import {
@@ -40,7 +40,7 @@ const TABS: { id: Tab; label: string; icon: ElementType }[] = [
 export default function App() {
   const [authed, setAuthed] = useState(isAuthenticated);
   const [tab, setTab]       = useState<Tab>('search');
-  const [settings, setSettings] = useState<AppSettings>(() => loadSettings());
+  const [settings] = useState<AppSettings>(() => loadSettings());
   const [leads, setLeads]       = useState<Lead[]>([]);
   const [isLoading, setIsLoading]   = useState(false);
   const [dbLoading, setDbLoading]   = useState(true);
@@ -60,10 +60,6 @@ export default function App() {
       setSearchHistory(hist);
     }).finally(() => setDbLoading(false));
   }, [authed]);
-
-  function handleSaveSettings(s: AppSettings) {
-    setSettings(s); saveSettings(s);
-  }
 
   async function handleSearch(params: SearchParams) {
     const { countryCode, countryAr, cityAr, cityEn } = params;
@@ -204,7 +200,7 @@ export default function App() {
             {tab === 'analytics' && <AnalyticsPanel leads={leads} />}
             {tab === 'settings' && (
               <div style={{ maxWidth: 660, margin: '0 auto' }}>
-                <SettingsPanel settings={settings} onSave={handleSaveSettings} />
+                <SettingsPanel />
               </div>
             )}
           </motion.div>
