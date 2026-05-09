@@ -3,6 +3,7 @@ import { Phone, MapPin, Star, Globe, Send, CheckCircle, Tag, MessageCircle, Mail
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Lead, LeadStatus } from '../types';
 import { LEAD_STATUSES, TEAM_MEMBERS } from '../types';
+import { EmailModal } from './EmailModal';
 
 interface LeadCardProps {
   lead: Lead;
@@ -169,6 +170,7 @@ export function LeadCard({ lead, onUpdate, onSendTelegram, onOpenReviews }: Lead
   const [showStatusMenu, setShowStatusMenu] = useState(false);
   const [showPrompt, setShowPrompt] = useState(false);
   const [showWhatsAppMenu, setShowWhatsAppMenu] = useState(false);
+  const [showEmail, setShowEmail] = useState(false);
 
   const currentStatus = LEAD_STATUSES.find(s => s.value === lead.status) || LEAD_STATUSES[0];
 
@@ -263,6 +265,10 @@ export function LeadCard({ lead, onUpdate, onSendTelegram, onOpenReviews }: Lead
           <button onClick={() => setShowPrompt(true)} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#ea580c', padding: '3px 8px', borderRadius: 8, background: 'linear-gradient(135deg,#fff7ed,#ffedd5)', border: '1.5px solid #fed7aa', cursor: 'pointer', fontWeight: 600 }}>
             <Sparkles size={10} /> Prompt
           </button>
+          {/* Email button */}
+          <button onClick={() => setShowEmail(true)} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: lead.email ? '#4f46e5' : '#94a3b8', padding: '3px 8px', borderRadius: 8, background: lead.email ? '#eef2ff' : '#f8fafc', border: `1.5px solid ${lead.email ? '#c7d2fe' : '#e2e8f0'}`, cursor: 'pointer', fontWeight: 600 }}>
+            <Mail size={10} /> بريد
+          </button>
         </div>
 
         {/* Notes */}
@@ -330,6 +336,9 @@ export function LeadCard({ lead, onUpdate, onSendTelegram, onOpenReviews }: Lead
 
       {/* AI Prompt Modal */}
       {showPrompt && <PromptModal lead={lead} onClose={() => setShowPrompt(false)} />}
+
+      {/* Email Modal */}
+      {showEmail && <EmailModal lead={lead} onClose={() => setShowEmail(false)} />}
     </>
   );
 }
