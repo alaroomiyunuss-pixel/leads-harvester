@@ -53,7 +53,8 @@ export async function sb_hasSearch(searchKey: string): Promise<boolean> {
 }
 
 export async function sb_saveSearchRecord(key: string, count: number, meta: Omit<SavedSearch, 'searchKey' | 'count' | 'timestamp'>): Promise<void> {
-  await supabase.from('searches').upsert({ search_key: key, count, timestamp: Date.now(), query: meta.query, country_code: meta.countryCode, country_ar: meta.countryAr, city_ar: meta.cityAr, city_en: meta.cityEn });
+  const { error } = await supabase.from('searches').upsert({ search_key: key, count, timestamp: Date.now(), query: meta.query, country_code: meta.countryCode, country_ar: meta.countryAr, city_ar: meta.cityAr, city_en: meta.cityEn });
+  if (error) throw error;
 }
 
 export async function sb_getSearchHistory(): Promise<SavedSearch[]> {
@@ -74,7 +75,8 @@ export async function sb_deleteSearch(searchKey: string): Promise<void> {
 export async function sb_saveLeads(leads: Lead[], searchKey: string): Promise<void> {
   if (!leads.length) return;
   const rows = leads.map(l => toRow(l, searchKey));
-  await supabase.from('leads').upsert(rows);
+  const { error } = await supabase.from('leads').upsert(rows);
+  if (error) throw error;
 }
 
 export async function sb_getLeadsBySearchKey(searchKey: string): Promise<Lead[]> {
@@ -94,7 +96,8 @@ export async function sb_updateLead(id: string, updates: Partial<Lead>): Promise
   if (updates.notes !== undefined)       patch.notes        = updates.notes;
   if (updates.email !== undefined)       patch.email        = updates.email;
   if (updates.deliveryUrl !== undefined) patch.delivery_url = updates.deliveryUrl;
-  await supabase.from('leads').update(patch).eq('id', id);
+  const { error } = await supabase.from('leads').update(patch).eq('id', id);
+  if (error) throw error;
 }
 
 export async function sb_clearAll(): Promise<void> {

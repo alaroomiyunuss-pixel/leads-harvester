@@ -16,6 +16,7 @@ import {
   clearAllLeadsFromDB as idb_clear,
   getSearchHistoryFromDB as idb_getHistory,
   deleteSearchRecordFromDB as idb_deleteSearch,
+  getAllLeadsRawFromDB,
 } from './db';
 import type { SavedSearch } from './db';
 
@@ -39,24 +40,35 @@ async function trySupabase<T>(fn: () => Promise<T>, fallback: () => Promise<T>):
 }
 
 export async function hasSearch(key: string): Promise<boolean> {
-  return trySupabase(() => sb_hasSearch(key), () => idb_has(key));
+  // تحقق من المصدرين — إن وُجدت في أي منهما فالبحث محفوظ
+  const [cloudResult, localResult] = await Promise.allSettled([
+    _useSupabase ? sb_hasSearch(key) : Promise.resolve(false),
+    idb_has(key),
+  ]);
+  const inCloud = cloudResult.status === 'fulfilled' && cloudResult.value === true;
+  const inLocal = localResult.status === 'fulfilled' && localResult.value === true;
+  return inCloud || inLocal;
 }
 
 export async function saveSearchRecord(
   key: string, count: number,
   meta: { query: string; countryCode: string; countryAr: string; cityAr: string; cityEn: string }
 ): Promise<void> {
-  await trySupabase(
-    () => sb_saveSearchRecord(key, count, meta),
-    () => idb_saveSR(key, count, meta)
-  );
+  // دائماً احفظ محلياً أولاً (ضمان الاستمرارية عند التحديث)
+  await idb_saveSR(key, count, meta);
+  // مزامنة سحابية في الخلفية (لا تمنع العمل إن فشلت)
+  if (_useSupabase) {
+    sb_saveSearchRecord(key, count, meta).catch(() => { _useSupabase = false; });
+  }
 }
 
 export async function saveLeads(leads: Lead[], key: string, country: string, city: string): Promise<void> {
-  await trySupabase(
-    () => sb_saveLeads(leads, key),
-    () => idb_save(leads, key, country, city)
-  );
+  // دائماً احفظ محلياً أولاً (ضمان الاستمرارية عند التحديث)
+  await idb_save(leads, key, country, city);
+  // مزامنة سحابية في الخلفية (لا تمنع العمل إن فشلت)
+  if (_useSupabase) {
+    sb_saveLeads(leads, key).catch(() => { _useSupabase = false; });
+  }
 }
 
 export async function getLeadsBySearchKey(key: string): Promise<Lead[]> {
@@ -103,11 +115,20 @@ export async function getSearchHistoryMerged(): Promise<SavedSearch[]> {
 }
 
 export async function updateLead(id: string, updates: Partial<Lead>): Promise<void> {
-  await trySupabase(() => sb_updateLead(id, updates), () => idb_update(id, updates));
+  // دائماً حدّث محلياً أولاً
+  await idb_update(id, updates);
+  // ثم حدّث السحابة في الخلفية
+  if (_useSupabase) {
+    sb_updateLead(id, updates).catch(() => { _useSupabase = false; });
+  }
 }
 
 export async function clearAll(): Promise<void> {
-  await trySupabase(() => sb_clearAll(), () => idb_clear());
+  // امسح من المصدرين معاً
+  await Promise.allSettled([
+    _useSupabase ? sb_clearAll() : Promise.resolve(),
+    idb_clear(),
+  ]);
 }
 
 export async function getSearchHistory(): Promise<SavedSearch[]> {
@@ -115,7 +136,11 @@ export async function getSearchHistory(): Promise<SavedSearch[]> {
 }
 
 export async function deleteSearchRecord(key: string): Promise<void> {
-  await trySupabase(() => sb_deleteSearch(key), () => idb_deleteSearch(key));
+  // احذف من المصدرين معاً
+  await Promise.allSettled([
+    _useSupabase ? sb_deleteSearch(key) : Promise.resolve(),
+    idb_deleteSearch(key),
+  ]);
 }
 
 /* ════════════════════════════════════════════════════════
