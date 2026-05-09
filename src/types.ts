@@ -34,6 +34,7 @@ export interface Lead {
   status: LeadStatus;
   assignee?: string;
   notes?: string;
+  deliveryUrl?: string;   // رابط الموقع/التطبيق المُسلَّم للعميل
   timestamp: Date;
   placeId?: string;
   country?: string;
