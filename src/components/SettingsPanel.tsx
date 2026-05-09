@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Key, Send, Eye, EyeOff, CheckCircle, ExternalLink, Info, Flame, Database } from 'lucide-react';
+import { Key, Send, Eye, EyeOff, CheckCircle, ExternalLink, Info, Database, Cloud } from 'lucide-react';
 import type { AppSettings } from '../types';
 import { storageEngine } from '../utils/storage-engine';
 
@@ -66,11 +66,16 @@ export function SettingsPanel({ settings, onSave }: SettingsPanelProps) {
     <div style={{ direction: 'rtl' }}>
 
       {/* Storage engine badge */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderRadius: 10, background: engine === 'firebase' ? '#f0fdf4' : '#f0f9ff', border: `1px solid ${engine === 'firebase' ? '#bbf7d0' : '#bae6fd'}`, marginBottom: 16 }}>
-        {engine === 'firebase' ? <Flame size={14} color="#16a34a" /> : <Database size={14} color="#0284c7" />}
-        <span style={{ fontSize: 12, color: engine === 'firebase' ? '#15803d' : '#0369a1', fontWeight: 500 }}>
-          {engine === 'firebase' ? '🔥 يعمل على Firebase Firestore (سحابي)' : '💾 يعمل على IndexedDB (محلي)'}
-        </span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderRadius: 12, background: engine === 'supabase' ? '#f0fdf4' : '#f0f9ff', border: `1px solid ${engine === 'supabase' ? '#bbf7d0' : '#bae6fd'}`, marginBottom: 16 }}>
+        {engine === 'supabase' ? <Cloud size={14} color="#16a34a" /> : <Database size={14} color="#0284c7" />}
+        <div>
+          <span style={{ fontSize: 12, color: engine === 'supabase' ? '#15803d' : '#0369a1', fontWeight: 600 }}>
+            {engine === 'supabase' ? '☁️ متصل بـ Supabase (سحابي)' : '💾 IndexedDB (محلي فقط)'}
+          </span>
+          <p style={{ margin: '1px 0 0', fontSize: 10, color: engine === 'supabase' ? '#16a34a' : '#0284c7' }}>
+            {engine === 'supabase' ? 'البيانات تُحفظ في السحابة وتُشارك مع الفريق' : 'Supabase غير متاح — يعمل محلياً'}
+          </p>
+        </div>
       </div>
 
       {/* Google Maps */}
@@ -84,24 +89,6 @@ export function SettingsPanel({ settings, onSave }: SettingsPanelProps) {
               <li>فعّل <b>Places API (New)</b></li>
               <li>فعّل الفوترة (Billing)</li>
               <li>أنشئ API Key من Credentials</li>
-            </ol>
-          </div>
-        </>
-      )}
-
-      {/* Firebase */}
-      {card('Firebase Firestore', 'تزامن سحابي — شارك البيانات مع الفريق', <Flame size={16} color="#ef4444" />, '#ef4444',
-        <>
-          {field('Firebase API Key', 'AIzaSy...', 'firebaseApiKey', true)}
-          {field('Auth Domain', 'your-project.firebaseapp.com', 'firebaseAuthDomain')}
-          {field('Project ID', 'your-project-id', 'firebaseProjectId')}
-          <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: 10 }}>
-            <p style={{ color: '#7f1d1d', fontSize: 11, margin: '0 0 6px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}><Info size={11} /> إعداد Firebase</p>
-            <ol style={{ color: '#991b1b', fontSize: 11, margin: 0, paddingRight: 16, lineHeight: 1.8 }}>
-              <li>أنشئ مشروعاً في <a href="https://console.firebase.google.com" target="_blank" rel="noopener noreferrer" style={{ color: '#dc2626' }}>Firebase Console <ExternalLink size={9} style={{ display: 'inline' }} /></a></li>
-              <li>فعّل <b>Firestore Database</b></li>
-              <li>اضبط Rules على <code style={{ fontSize: 10, background: '#fee2e2', padding: '1px 4px', borderRadius: 4 }}>allow read, write: if true;</code></li>
-              <li>انسخ الـ Config من إعدادات المشروع</li>
             </ol>
           </div>
         </>

@@ -45,9 +45,6 @@ export interface AppSettings {
   googleApiKey: string;
   telegramBotToken: string;
   telegramChatId: string;
-  firebaseApiKey?: string;
-  firebaseAuthDomain?: string;
-  firebaseProjectId?: string;
 }
 
 export interface SearchParams {
