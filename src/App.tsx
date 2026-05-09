@@ -1,6 +1,6 @@
 import { useState, useEffect, type ElementType } from 'react';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
-import { LayoutDashboard, Search, Settings as SettingsIcon, Zap, BarChart3, Database, Cloud } from 'lucide-react';
+import { LayoutDashboard, Search, Settings as SettingsIcon, Zap, FolderOpen, Database, Cloud } from 'lucide-react';
 import type { Lead, AppSettings, SearchParams } from './types';
 import { loadSettings } from './utils/storage';
 import { searchPlaces } from './utils/googleMaps';
@@ -8,21 +8,20 @@ import { sendToTelegram, sendBulkToTelegram } from './utils/telegram';
 import {
   makeSearchKey, storageEngine,
   hasSearch, saveSearchRecord, saveLeads,
-  getLeadsBySearchKey, getAllLeads, updateLead, clearAll,
+  getAllLeads, updateLead, clearAll,
   getSearchHistory, deleteSearchRecord,
 } from './utils/storage-engine';
 import type { SavedSearch } from './utils/storage-engine';
-import { SearchPanel }        from './components/SearchPanel';
-import { LeadBoard }          from './components/LeadBoard';
-import { SettingsPanel }      from './components/SettingsPanel';
-import { ErrorBanner }        from './components/ErrorBanner';
-import { AnalyticsPanel }     from './components/AnalyticsPanel';
-import { ReviewsModal }       from './components/ReviewsModal';
-import { SearchHistoryPanel } from './components/SearchHistoryPanel';
+import { SearchPanel }      from './components/SearchPanel';
+import { LeadBoard }        from './components/LeadBoard';
+import { SettingsPanel }    from './components/SettingsPanel';
+import { ErrorBanner }      from './components/ErrorBanner';
+import { ReviewsModal }     from './components/ReviewsModal';
+import { OperationsPanel }  from './components/OperationsPanel';
 import { AuthGate, isAuthenticated } from './components/AuthGate';
 import './index.css';
 
-type Tab = 'dashboard' | 'analytics' | 'search' | 'settings';
+type Tab = 'search' | 'dashboard' | 'operations' | 'settings';
 
 const TAB_VARIANTS: Variants = {
   initial: { opacity: 0, y: 10 },
@@ -31,25 +30,26 @@ const TAB_VARIANTS: Variants = {
 };
 
 const TABS: { id: Tab; label: string; icon: ElementType }[] = [
-  { id: 'search',    label: 'البحث',        icon: Search },
-  { id: 'dashboard', label: 'العملاء',      icon: LayoutDashboard },
-  { id: 'analytics', label: 'التحليلات',   icon: BarChart3 },
-  { id: 'settings',  label: 'الإعدادات',   icon: SettingsIcon },
+  { id: 'search',     label: 'البحث',      icon: Search },
+  { id: 'dashboard',  label: 'العملاء',    icon: LayoutDashboard },
+  { id: 'operations', label: 'العمليات',   icon: FolderOpen },
+  { id: 'settings',   label: 'الإعدادات', icon: SettingsIcon },
 ];
 
 export default function App() {
-  const [authed, setAuthed] = useState(isAuthenticated);
-  const [tab, setTab]       = useState<Tab>('search');
-  const [settings] = useState<AppSettings>(() => loadSettings());
-  const [leads, setLeads]       = useState<Lead[]>([]);
+  const [authed, setAuthed]         = useState(isAuthenticated);
+  const [tab, setTab]               = useState<Tab>('search');
+  const [settings]                  = useState<AppSettings>(() => loadSettings());
+  const [leads, setLeads]           = useState<Lead[]>([]);
   const [isLoading, setIsLoading]   = useState(false);
   const [dbLoading, setDbLoading]   = useState(true);
   const [error, setError]           = useState('');
+  const [searchInfo, setSearchInfo] = useState('');   // رسالة dedup
   const [bulkProgress, setBulkProgress] = useState('');
-  const [lastFromCache, setLastFromCache] = useState(false);
   const [reviewLead, setReviewLead] = useState<Lead | null>(null);
   const [searchHistory, setSearchHistory] = useState<SavedSearch[]>([]);
 
+  /* ── تحميل البيانات عند بدء التطبيق ── */
   useEffect(() => {
     if (!authed) return;
     Promise.all([
@@ -61,37 +61,61 @@ export default function App() {
     }).finally(() => setDbLoading(false));
   }, [authed]);
 
+  /* ── دالة dedup مشتركة ── */
+  function mergeLeads(incoming: Lead[], prev: Lead[]): Lead[] {
+    const ids = new Set(prev.map(l => l.id));
+    return [...incoming.filter(l => !ids.has(l.id)), ...prev];
+  }
+
+  /* ── بحث جديد ── */
   async function handleSearch(params: SearchParams) {
     const { countryCode, countryAr, cityAr, cityEn } = params;
     const searchKey = makeSearchKey(params.query, countryCode, cityEn);
-    setIsLoading(true); setError(''); setLastFromCache(false); setTab('dashboard');
+    setIsLoading(true); setError(''); setSearchInfo(''); setTab('dashboard');
     try {
+      /* مخبَّأ سابقاً؟ حمّله فوراً */
       if (await hasSearch(searchKey)) {
-        const cached = await getLeadsBySearchKey(searchKey);
-        setLastFromCache(true);
-        setLeads(prev => { const ids = new Set(prev.map(l => l.id)); return [...cached.filter(l => !ids.has(l.id)), ...prev]; });
+        setSearchInfo('⚡ مُحمَّل من الذاكرة — لا استدعاء API');
+        const cached = await getLeadsBySearchKey_local(searchKey);
+        setLeads(prev => mergeLeads(cached, prev));
         return;
       }
+
+      /* استخراج جديد من Google */
       const found = await searchPlaces(params, settings.googleApiKey);
+
+      /* dedup عبر جميع البحوث السابقة */
+      const existingIds = new Set(leads.map(l => l.id));
+      const brandNew    = found.filter(l => !existingIds.has(l.id));
+      const dupCount    = found.length - brandNew.length;
+
+      /* حفظ (upsert — لا تكرار في قاعدة البيانات) */
       await saveLeads(found, searchKey, countryCode, cityAr);
       await saveSearchRecord(searchKey, found.length, { query: params.query, countryCode, countryAr, cityAr, cityEn });
       getSearchHistory().then(h => setSearchHistory(h)).catch(() => {});
-      setLeads(prev => { const ids = new Set(prev.map(l => l.id)); return [...found.filter(l => !ids.has(l.id)), ...prev]; });
+
+      /* تحديث الواجهة */
+      setLeads(prev => mergeLeads(brandNew, prev));
+
+      if (dupCount > 0) {
+        setSearchInfo(`✅ ${brandNew.length} عميل جديد | ⏭ ${dupCount} موجود مسبقاً — تم تجاهله`);
+      } else {
+        setSearchInfo(`✅ ${brandNew.length} عميل جديد مُضاف`);
+      }
+
     } catch (err) {
       setError(err instanceof Error ? err.message : 'حدث خطأ أثناء البحث');
     } finally { setIsLoading(false); }
   }
 
-  async function handleReloadSearch(s: SavedSearch) {
-    setIsLoading(true); setError(''); setLastFromCache(true); setTab('dashboard');
-    try {
-      const cached = await getLeadsBySearchKey(s.searchKey);
-      setLeads(prev => { const ids = new Set(prev.map(l => l.id)); return [...cached.filter(l => !ids.has(l.id)), ...prev]; });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'خطأ في تحميل البحث');
-    } finally { setIsLoading(false); }
+  /* ── تحميل نتائج من تبويب العمليات ── */
+  function handleLoadLeads(incoming: Lead[], label: string) {
+    setLeads(prev => mergeLeads(incoming, prev));
+    setSearchInfo(`📂 ${label} — ${incoming.length} عميل`);
+    setTab('dashboard');
   }
 
+  /* ── حذف عملية بحث ── */
   async function handleDeleteSearch(searchKey: string) {
     await deleteSearchRecord(searchKey);
     setSearchHistory(prev => prev.filter(s => s.searchKey !== searchKey));
@@ -120,7 +144,9 @@ export default function App() {
   }
 
   async function handleClear() {
-    if (window.confirm('مسح جميع البيانات؟ لا يمكن التراجع.')) { await clearAll(); setLeads([]); setSearchHistory([]); }
+    if (window.confirm('مسح جميع البيانات؟ لا يمكن التراجع.')) {
+      await clearAll(); setLeads([]); setSearchHistory([]);
+    }
   }
 
   if (!authed) return <AuthGate onAuth={() => setAuthed(true)} />;
@@ -176,38 +202,72 @@ export default function App() {
 
         {error && <div style={{ marginBottom: 12 }}><ErrorBanner message={error} onClose={() => setError('')} /></div>}
 
+        {/* رسالة dedup */}
+        {searchInfo && !error && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 12, padding: '9px 14px', marginBottom: 12 }}>
+            <span style={{ color: '#15803d', fontSize: 12, fontWeight: 600 }}>{searchInfo}</span>
+            <button onClick={() => setSearchInfo('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#86efac', fontSize: 16, lineHeight: 1 }}>×</button>
+          </div>
+        )}
+
         {isLoading && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 14, padding: '12px 14px', marginBottom: 12 }}>
             <div style={{ width: 16, height: 16, border: '2px solid #bfdbfe', borderTopColor: '#3b82f6', borderRadius: '50%', flexShrink: 0, animation: 'spin 1s linear infinite' }} />
             <div>
               <p style={{ color: '#1e40af', fontSize: 13, fontWeight: 600, margin: 0 }}>جارٍ الاستخراج — 10 بحوث متوازية...</p>
-              <p style={{ color: '#3b82f6', fontSize: 11, margin: '2px 0 0' }}>تُحفظ تلقائياً في قاعدة البيانات</p>
+              <p style={{ color: '#3b82f6', fontSize: 11, margin: '2px 0 0' }}>تُحفظ تلقائياً — المكررات تُحذف تلقائياً</p>
             </div>
           </div>
         )}
 
         <AnimatePresence mode="wait">
           <motion.div key={tab} variants={TAB_VARIANTS} initial="initial" animate="animate" exit="exit">
+
             {tab === 'search' && (
               <div style={{ maxWidth: 680, margin: '0 auto' }}>
-                <SearchPanel onSearch={handleSearch} isLoading={isLoading} hasApiKey={!!settings.googleApiKey} lastFromCache={lastFromCache} />
-                <SearchHistoryPanel history={searchHistory} onReload={handleReloadSearch} onDelete={handleDeleteSearch} isLoading={isLoading} />
+                <SearchPanel
+                  onSearch={handleSearch}
+                  isLoading={isLoading}
+                  hasApiKey={!!settings.googleApiKey}
+                  lastFromCache={false}
+                />
               </div>
             )}
+
             {tab === 'dashboard' && (
-              <LeadBoard leads={leads} onUpdate={handleUpdate} onSendTelegram={handleSendTelegram} onSendBulk={handleBulkSend} onClear={handleClear} onOpenReviews={setReviewLead} />
+              <LeadBoard
+                leads={leads}
+                onUpdate={handleUpdate}
+                onSendTelegram={handleSendTelegram}
+                onSendBulk={handleBulkSend}
+                onClear={handleClear}
+                onOpenReviews={setReviewLead}
+              />
             )}
-            {tab === 'analytics' && <AnalyticsPanel leads={leads} />}
+
+            {tab === 'operations' && (
+              <div style={{ maxWidth: 720, margin: '0 auto' }}>
+                <OperationsPanel
+                  history={searchHistory}
+                  allLeads={leads}
+                  onLoadLeads={handleLoadLeads}
+                  onDelete={handleDeleteSearch}
+                  isLoading={isLoading}
+                />
+              </div>
+            )}
+
             {tab === 'settings' && (
               <div style={{ maxWidth: 660, margin: '0 auto' }}>
                 <SettingsPanel />
               </div>
             )}
+
           </motion.div>
         </AnimatePresence>
       </main>
 
-      {/* ══ Bottom Navigation (Mobile App Style) ══ */}
+      {/* ══ Bottom Navigation ══ */}
       <nav style={{
         position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 100,
         background: 'white', borderTop: '1px solid #e2e8f0',
@@ -219,39 +279,37 @@ export default function App() {
           const Icon = t.icon;
           const active = tab === t.id;
           const isSearch = t.id === 'search';
+          /* شارة عدد العمليات */
+          const badge = t.id === 'operations' && searchHistory.length > 0 ? searchHistory.length : null;
           return (
             <motion.button
               key={t.id}
               onClick={() => setTab(t.id)}
               whileTap={{ scale: 0.92 }}
               style={{
-                flex: isSearch ? 1.4 : 1,
+                flex: isSearch ? 1.3 : 1,
                 display: 'flex', flexDirection: 'column', alignItems: 'center',
                 justifyContent: 'center', gap: isSearch ? 3 : 2,
                 padding: isSearch ? '10px 8px' : '8px 4px',
                 border: 'none', cursor: 'pointer',
-                background: active ? (isSearch ? 'linear-gradient(135deg,#2563eb,#1d4ed8)' : '#eff6ff') : 'transparent',
-                borderRadius: isSearch ? 0 : 0,
+                background: active
+                  ? (isSearch ? 'linear-gradient(135deg,#2563eb,#1d4ed8)' : '#eff6ff')
+                  : 'transparent',
                 position: 'relative',
               }}
             >
               {isSearch && active && (
-                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: '#2563eb', borderRadius: '0 0 3px 3px' }} />
+                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: '#2563eb' }} />
               )}
-              <div style={{
-                padding: isSearch ? '8px 20px' : '5px 12px',
-                borderRadius: isSearch ? 14 : 10,
-                background: active
-                  ? (isSearch ? 'rgba(255,255,255,0.2)' : '#dbeafe')
-                  : (isSearch ? '#eff6ff' : 'transparent'),
-              }}>
+              <div style={{ position: 'relative', padding: isSearch ? '8px 16px' : '5px 12px', borderRadius: isSearch ? 14 : 10, background: active ? (isSearch ? 'rgba(255,255,255,0.2)' : '#dbeafe') : (isSearch ? '#eff6ff' : 'transparent') }}>
                 <Icon size={isSearch ? 22 : 18} color={active ? (isSearch ? 'white' : '#2563eb') : '#94a3b8'} />
+                {badge && (
+                  <span style={{ position: 'absolute', top: -3, left: -3, background: '#ef4444', color: 'white', fontSize: 9, fontWeight: 800, borderRadius: 10, padding: '1px 4px', minWidth: 15, textAlign: 'center', lineHeight: '13px' }}>
+                    {badge}
+                  </span>
+                )}
               </div>
-              <span style={{
-                fontSize: isSearch ? 12 : 10,
-                fontWeight: active ? 700 : 400,
-                color: active ? (isSearch ? 'white' : '#2563eb') : '#94a3b8',
-              }}>
+              <span style={{ fontSize: isSearch ? 12 : 10, fontWeight: active ? 700 : 400, color: active ? (isSearch ? 'white' : '#2563eb') : '#94a3b8' }}>
                 {t.label}
               </span>
             </motion.button>
@@ -272,3 +330,6 @@ export default function App() {
     </div>
   );
 }
+
+/* helper محلي لتجنب circular import */
+import { getLeadsBySearchKey as getLeadsBySearchKey_local } from './utils/storage-engine';
