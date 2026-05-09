@@ -1,5 +1,6 @@
-import { Cloud, Database, ShieldCheck, AlertCircle, Send, Key, Lock } from 'lucide-react';
-import { storageEngine } from '../utils/storage-engine';
+import { useState } from 'react';
+import { Cloud, Database, ShieldCheck, AlertCircle, Send, Key, Lock, UploadCloud, CheckCircle, RefreshCw } from 'lucide-react';
+import { storageEngine, migrateLocalToCloud } from '../utils/storage-engine';
 
 /* نقرأ فقط هل المتغير موجود أم لا — لا نعرضه أبداً */
 const HAS_GOOGLE   = !!import.meta.env.VITE_GOOGLE_API_KEY;
@@ -20,7 +21,28 @@ function StatusRow({ label, ok, okText, failText }: { label: string; ok: boolean
 
 export function SettingsPanel() {
   const engine = storageEngine();
-  const allOk = HAS_GOOGLE && HAS_TG_TOKEN && HAS_TG_CHAT;
+  const allOk  = HAS_GOOGLE && HAS_TG_TOKEN && HAS_TG_CHAT;
+
+  const [migrating,    setMigrating]    = useState(false);
+  const [migrateMsg,   setMigrateMsg]   = useState('');
+  const [migrateOk,    setMigrateOk]    = useState(false);
+
+  async function handleMigrate() {
+    setMigrating(true); setMigrateMsg(''); setMigrateOk(false);
+    try {
+      const result = await migrateLocalToCloud((done, total, phase) => {
+        setMigrateMsg(`${phase} ${total > 1 ? `${done}/${total}` : ''}`);
+      });
+      if (result.leads === 0 && result.searches === 0) {
+        setMigrateMsg('لا توجد بيانات محلية للرفع — كل شيء موجود في السحابة بالفعل ✅');
+      } else {
+        setMigrateMsg(`✅ تم رفع ${result.leads} عميل و${result.searches} بحث إلى السحابة${result.skipped > 0 ? ` (${result.skipped} موجود مسبقاً)` : ''}`);
+      }
+      setMigrateOk(true);
+    } catch {
+      setMigrateMsg('❌ فشل الرفع — تحقق من اتصال الإنترنت');
+    } finally { setMigrating(false); }
+  }
 
   return (
     <div style={{ direction: 'rtl' }}>
@@ -81,6 +103,33 @@ export function SettingsPanel() {
             </p>
           </div>
         )}
+      </div>
+
+      {/* ═══ مزامنة البيانات المحلية ═══ */}
+      <div style={{ borderRadius: 14, border: '1.5px solid #bfdbfe', background: '#eff6ff', padding: 16, marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+          <div style={{ padding: 8, borderRadius: 10, background: '#dbeafe', border: '1px solid #bfdbfe' }}>
+            <UploadCloud size={16} color="#2563eb" />
+          </div>
+          <div>
+            <h3 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#1e40af' }}>رفع البيانات المحلية إلى السحابة</h3>
+            <p style={{ margin: '2px 0 0', fontSize: 11, color: '#3b82f6', lineHeight: 1.5 }}>
+              إذا البيانات تظهر عندك فقط ولا تظهر لغيرك — اضغط هنا
+            </p>
+          </div>
+        </div>
+        {migrateMsg && (
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '9px 12px', borderRadius: 10, background: migrateOk ? '#f0fdf4' : '#fff7ed', border: `1px solid ${migrateOk ? '#bbf7d0' : '#fed7aa'}`, marginBottom: 10 }}>
+            {migrateOk ? <CheckCircle size={13} color="#16a34a" style={{ flexShrink: 0, marginTop: 1 }} /> : <AlertCircle size={13} color="#d97706" style={{ flexShrink: 0, marginTop: 1 }} />}
+            <span style={{ fontSize: 11, color: migrateOk ? '#15803d' : '#92400e', lineHeight: 1.5 }}>{migrateMsg}</span>
+          </div>
+        )}
+        <button onClick={handleMigrate} disabled={migrating}
+          style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '11px', borderRadius: 11, fontSize: 13, fontWeight: 700, border: 'none', cursor: migrating ? 'not-allowed' : 'pointer', background: migrating ? '#93c5fd' : '#2563eb', color: 'white', transition: 'all 0.2s' }}>
+          {migrating
+            ? <><RefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> جارٍ الرفع...</>
+            : <><UploadCloud size={14} /> رفع البيانات إلى السحابة</>}
+        </button>
       </div>
 
       {/* حالة التليجرام */}

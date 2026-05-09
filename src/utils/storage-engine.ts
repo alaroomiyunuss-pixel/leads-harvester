@@ -82,3 +82,57 @@ export async function getSearchHistory(): Promise<SavedSearch[]> {
 export async function deleteSearchRecord(key: string): Promise<void> {
   await trySupabase(() => sb_deleteSearch(key), () => idb_deleteSearch(key));
 }
+
+/* ════════════════════════════════════════════════════════
+   Migration: نقل البيانات المحلية → Supabase
+   ════════════════════════════════════════════════════════ */
+export async function migrateLocalToCloud(
+  onProgress?: (done: number, total: number, phase: string) => void
+): Promise<{ leads: number; searches: number; skipped: number }> {
+
+  onProgress?.(0, 1, 'جارٍ قراءة البيانات المحلية...');
+
+  const [rawLeads, localSearches] = await Promise.all([
+    getAllLeadsRawFromDB(),
+    idb_getHistory(),
+  ]);
+
+  if (!rawLeads.length && !localSearches.length) {
+    return { leads: 0, searches: 0, skipped: 0 };
+  }
+
+  onProgress?.(0, rawLeads.length, 'فحص البيانات الموجودة في السحابة...');
+  const cloudLeads = await sb_getAllLeads().catch(() => [] as Lead[]);
+  const cloudIds   = new Set(cloudLeads.map(l => l.id));
+
+  const newLeads = rawLeads.filter(l => !cloudIds.has(l.id));
+  const skipped  = rawLeads.length - newLeads.length;
+
+  /* جمّع حسب searchKey */
+  const byKey = new Map<string, typeof rawLeads>();
+  for (const lead of newLeads) {
+    const key = (lead as { searchKey?: string }).searchKey || 'migrated';
+    if (!byKey.has(key)) byKey.set(key, []);
+    byKey.get(key)!.push(lead);
+  }
+
+  let done = 0;
+  for (const [key, leads] of byKey) {
+    await sb_saveLeads(leads as Lead[], key).catch(() => {});
+    done += leads.length;
+    onProgress?.(done, newLeads.length, `جارٍ رفع العملاء... (${done}/${newLeads.length})`);
+  }
+
+  onProgress?.(done, newLeads.length, 'جارٍ رفع سجلات البحث...');
+  for (const s of localSearches) {
+    await sb_saveSearchRecord(s.searchKey, s.count, {
+      query: s.query, countryCode: s.countryCode,
+      countryAr: s.countryAr, cityAr: s.cityAr, cityEn: s.cityEn,
+    }).catch(() => {});
+  }
+
+  /* إعادة تفعيل Supabase */
+  _useSupabase = true;
+
+  return { leads: newLeads.length, searches: localSearches.length, skipped };
+}

@@ -149,12 +149,18 @@ export async function getAllLeadsFromDB(): Promise<Lead[]> {
   return new Promise((resolve, reject) => {
     const req = tx(db, 'leads').objectStore('leads').getAll();
     req.onsuccess = () =>
-      resolve(
-        req.result.map((l: StoredLead) => ({
-          ...l,
-          timestamp: new Date(l.timestamp),
-        }))
-      );
+      resolve(req.result.map((l: StoredLead) => ({ ...l, timestamp: new Date(l.timestamp) })));
+    req.onerror = () => reject(req.error);
+  });
+}
+
+/* دالة خاصة للـ migration — تُرجع البيانات الكاملة مع searchKey */
+export async function getAllLeadsRawFromDB(): Promise<StoredLead[]> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const req = tx(db, 'leads').objectStore('leads').getAll();
+    req.onsuccess = () =>
+      resolve(req.result.map((l: StoredLead) => ({ ...l, timestamp: new Date(l.timestamp) })));
     req.onerror = () => reject(req.error);
   });
 }
