@@ -19,6 +19,7 @@ import { ErrorBanner }      from './components/ErrorBanner';
 import { ReviewsModal }     from './components/ReviewsModal';
 import { OperationsPanel }  from './components/OperationsPanel';
 import { AuthGate, isAuthenticated } from './components/AuthGate';
+
 import './index.css';
 
 type Tab = 'search' | 'dashboard' | 'operations' | 'settings';
@@ -106,13 +107,6 @@ export default function App() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'حدث خطأ أثناء البحث');
     } finally { setIsLoading(false); }
-  }
-
-  /* ── تحميل نتائج من تبويب العمليات ── */
-  function handleLoadLeads(incoming: Lead[], label: string) {
-    setLeads(prev => mergeLeads(incoming, prev));
-    setSearchInfo(`📂 ${label} — ${incoming.length} عميل`);
-    setTab('dashboard');
   }
 
   /* ── حذف عملية بحث ── */
@@ -246,15 +240,15 @@ export default function App() {
             )}
 
             {tab === 'operations' && (
-              <div style={{ maxWidth: 720, margin: '0 auto' }}>
-                <OperationsPanel
-                  history={searchHistory}
-                  allLeads={leads}
-                  onLoadLeads={handleLoadLeads}
-                  onDelete={handleDeleteSearch}
-                  isLoading={isLoading}
-                />
-              </div>
+              <OperationsPanel
+                leads={leads}
+                history={searchHistory}
+                onUpdate={handleUpdate}
+                onSendTelegram={handleSendTelegram}
+                onOpenReviews={setReviewLead}
+                onDelete={handleDeleteSearch}
+                isLoading={isLoading}
+              />
             )}
 
             {tab === 'settings' && (
