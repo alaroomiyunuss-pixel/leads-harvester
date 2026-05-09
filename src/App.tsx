@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type ElementType } from 'react';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { LayoutDashboard, Search, Settings as SettingsIcon, Zap, BarChart3, Database, Flame } from 'lucide-react';
 import type { Lead, AppSettings, SearchParams } from './types';
@@ -118,7 +118,7 @@ export default function App() {
     if (window.confirm('مسح جميع البيانات؟ لا يمكن التراجع.')) { await clearAll(); setLeads([]); }
   }
 
-  const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
+  const tabs: { id: Tab; label: string; icon: ElementType }[] = [
     { id: 'dashboard',  label: 'لوحة التحكم', icon: LayoutDashboard },
     { id: 'analytics',  label: 'التحليلات',   icon: BarChart3 },
     { id: 'search',     label: 'البحث',        icon: Search },
