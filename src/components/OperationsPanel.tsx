@@ -4,6 +4,7 @@ import { Users, MapPin, Globe2, ChevronDown, Trash2, RefreshCw, AlertCircle, Fol
 import type { Lead } from '../types';
 import type { SavedSearch } from '../utils/storage-engine';
 import { LeadCard } from './LeadCard';
+import { SyncBanner } from './SyncBanner';
 
 interface Props {
   leads: Lead[];
@@ -93,18 +94,24 @@ export function OperationsPanel({ leads, history, onUpdate, onSendTelegram, onOp
   /* ── حالة فارغة ── */
   if (!leads.length) {
     return (
-      <div style={{ textAlign: 'center', padding: '60px 20px', direction: 'rtl' }}>
-        <div style={{ display: 'inline-flex', padding: 20, borderRadius: 20, background: '#f1f5f9', marginBottom: 16 }}>
-          <FolderOpen size={32} color="#94a3b8" />
+      <div style={{ direction: 'rtl' }}>
+        <SyncBanner />
+        <div style={{ textAlign: 'center', padding: '48px 20px' }}>
+          <div style={{ display: 'inline-flex', padding: 20, borderRadius: 20, background: '#f1f5f9', marginBottom: 16 }}>
+            <FolderOpen size={32} color="#94a3b8" />
+          </div>
+          <p style={{ color: '#64748b', fontSize: 14, fontWeight: 600 }}>لا توجد بيانات بعد</p>
+          <p style={{ color: '#94a3b8', fontSize: 12 }}>ابدأ بالبحث وستظهر جميع النتائج هنا تلقائياً</p>
         </div>
-        <p style={{ color: '#64748b', fontSize: 14, fontWeight: 600 }}>لا توجد بيانات بعد</p>
-        <p style={{ color: '#94a3b8', fontSize: 12 }}>ابدأ بالبحث وستظهر جميع النتائج هنا تلقائياً</p>
       </div>
     );
   }
 
   return (
     <div style={{ direction: 'rtl' }}>
+
+      {/* ══ زر المزامنة ══ */}
+      <SyncBanner />
 
       {/* ══ إحصائيات سريعة ══ */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginBottom: 12 }}>

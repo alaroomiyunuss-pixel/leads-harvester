@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import type { Lead } from '../types';
 import { LEAD_STATUSES, TEAM_MEMBERS } from '../types';
 import { LeadCard } from './LeadCard';
+import { SyncBanner } from './SyncBanner';
 
 interface LeadBoardProps {
   leads: Lead[];
@@ -60,6 +61,10 @@ export function LeadBoard({ leads, onUpdate, onSendTelegram, onSendBulk, onClear
   });
 
   return (
+    <div style={{ direction: 'rtl' }}>
+      {/* ══ زر المزامنة ══ */}
+      <SyncBanner />
+
     <div style={{ background: 'white', borderRadius: 18, border: '1px solid #e2e8f0', padding: 20, boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
@@ -119,6 +124,7 @@ export function LeadBoard({ leads, onUpdate, onSendTelegram, onSendBulk, onClear
           ))}
         </motion.div>
       )}
+    </div>
     </div>
   );
 }
