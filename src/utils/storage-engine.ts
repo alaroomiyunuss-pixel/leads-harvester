@@ -236,6 +236,44 @@ export async function migrateLocalToCloud(
     byKey.get(key)!.push(lead);
   }
 
+  /* ══ الخطوة 1: ارفع سجلات البحث أولاً (foreign key يشترطها) ══ */
+  onProgress?.(0, newLeads.length, 'جارٍ رفع سجلات البحث...');
+
+  // اجمع كل الـ searchKeys الموجودة في العملاء الجدد
+  const keysInLeads = new Set(
+    newLeads.map(l => (l as { searchKey?: string }).searchKey).filter(Boolean) as string[]
+  );
+  // Map من searchKey → بيانات البحث
+  const searchMap = new Map(localSearches.map(s => [s.searchKey, s]));
+
+  for (const key of keysInLeads) {
+    const s = searchMap.get(key);
+    await sb_saveSearchRecord(
+      key,
+      s?.count ?? 0,
+      {
+        query:       s?.query      ?? key.split('|')[0] ?? key,
+        countryCode: s?.countryCode ?? key.split('|')[1] ?? '',
+        countryAr:   s?.countryAr  ?? '',
+        cityAr:      s?.cityAr     ?? key.split('|')[2] ?? '',
+        cityEn:      s?.cityEn     ?? key.split('|')[2] ?? '',
+        maxRadius:   s?.maxRadius  ?? 0,
+      }
+    ).catch(() => {/* تجاهل — ربما موجود مسبقاً */});
+  }
+
+  // ارفع بقية السجلات (غير المرتبطة بعملاء جدد)
+  for (const s of localSearches) {
+    if (!keysInLeads.has(s.searchKey)) {
+      await sb_saveSearchRecord(s.searchKey, s.count, {
+        query: s.query, countryCode: s.countryCode,
+        countryAr: s.countryAr, cityAr: s.cityAr, cityEn: s.cityEn,
+        maxRadius: s.maxRadius ?? 0,
+      }).catch(() => {});
+    }
+  }
+
+  /* ══ الخطوة 2: ارفع العملاء (بعد وجود الـ search keys) ══ */
   let done = 0;
   let firstError: string | null = null;
   for (const [key, leads] of byKey) {
@@ -254,15 +292,6 @@ export async function migrateLocalToCloud(
   }
 
   if (firstError) throw new Error(`فشل رفع العملاء: ${firstError}`);
-
-  onProgress?.(done, newLeads.length, 'جارٍ رفع سجلات البحث...');
-  for (const s of localSearches) {
-    await sb_saveSearchRecord(s.searchKey, s.count, {
-      query: s.query, countryCode: s.countryCode,
-      countryAr: s.countryAr, cityAr: s.cityAr, cityEn: s.cityEn,
-      maxRadius: s.maxRadius ?? 0,
-    }).catch(() => {});
-  }
 
   /* إعادة تفعيل Supabase */
   _useSupabase = true;
