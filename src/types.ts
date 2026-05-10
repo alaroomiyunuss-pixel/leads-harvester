@@ -36,6 +36,7 @@ export interface Lead {
   notes?: string;
   deliveryUrl?: string;   // رابط الموقع/التطبيق المُسلَّم للعميل
   timestamp: Date;
+  serialNumber?: number;  // رقم تسلسلي فريد لكل منشأة
   placeId?: string;
   country?: string;
   city?: string;

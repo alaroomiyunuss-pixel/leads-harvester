@@ -7,7 +7,7 @@ import {
   sb_hasSearch, sb_saveSearchRecord, sb_saveLeads,
   sb_getLeadsBySearchKey, sb_getAllLeads, sb_updateLead,
   sb_clearAll, sb_getSearchHistory, sb_deleteSearch,
-  sb_getSearchRecord,
+  sb_getSearchRecord, sb_getMaxSerial,
 } from './supabase';
 import {
   makeSearchKey as _mk,
@@ -19,6 +19,7 @@ import {
   deleteSearchRecordFromDB as idb_deleteSearch,
   getAllLeadsRawFromDB,
   getSearchRecordFromDB as idb_getSearchRecord,
+  getMaxSerialFromDB,
 } from './db';
 import type { SavedSearch } from './db';
 
@@ -64,7 +65,25 @@ export async function saveSearchRecord(
   }
 }
 
+/** احسب أكبر رقم تسلسلي موجود في أي مصدر */
+async function getMaxSerial(): Promise<number> {
+  const [cloud, local] = await Promise.allSettled([
+    _useSupabase ? sb_getMaxSerial() : Promise.resolve(0),
+    getMaxSerialFromDB(),
+  ]);
+  return Math.max(
+    cloud.status === 'fulfilled' ? cloud.value : 0,
+    local.status === 'fulfilled' ? local.value : 0,
+  );
+}
+
 export async function saveLeads(leads: Lead[], key: string, country: string, city: string): Promise<void> {
+  // عيّن أرقاماً تسلسلية للعملاء الجدد (بدون رقم)
+  const unNumbered = leads.filter(l => !l.serialNumber);
+  if (unNumbered.length > 0) {
+    const maxSerial = await getMaxSerial();
+    unNumbered.forEach((l, i) => { l.serialNumber = maxSerial + i + 1; });
+  }
   // دائماً احفظ محلياً أولاً (ضمان الاستمرارية عند التحديث)
   await idb_save(leads, key, country, city);
   // مزامنة سحابية في الخلفية (لا تمنع العمل إن فشلت)
@@ -191,11 +210,23 @@ export async function migrateLocalToCloud(
   }
 
   onProgress?.(0, rawLeads.length, 'فحص البيانات الموجودة في السحابة...');
-  const cloudLeads = await sb_getAllLeads().catch(() => [] as Lead[]);
-  const cloudIds   = new Set(cloudLeads.map(l => l.id));
+  const cloudLeads    = await sb_getAllLeads().catch(() => [] as Lead[]);
+  const cloudIds      = new Set(cloudLeads.map(l => l.id));
+  const cloudPlaceIds = new Set(cloudLeads.map(l => l.placeId).filter(Boolean) as string[]);
 
-  const newLeads = rawLeads.filter(l => !cloudIds.has(l.id));
+  // dedup بالـ id والـ placeId معاً لتجنب أي تكرار
+  const newLeads = rawLeads.filter(l =>
+    !cloudIds.has(l.id) &&
+    !(l.placeId && cloudPlaceIds.has(l.placeId))
+  );
   const skipped  = rawLeads.length - newLeads.length;
+
+  /* عيّن أرقاماً تسلسلية للعملاء الجدد */
+  const maxCloudSerial = cloudLeads.reduce((m, l) => Math.max(m, l.serialNumber ?? 0), 0);
+  let nextSerial = maxCloudSerial + 1;
+  for (const lead of newLeads) {
+    if (!lead.serialNumber) lead.serialNumber = nextSerial++;
+  }
 
   /* جمّع حسب searchKey */
   const byKey = new Map<string, typeof rawLeads>();

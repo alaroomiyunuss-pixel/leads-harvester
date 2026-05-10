@@ -21,6 +21,7 @@ function toRow(lead: Lead, searchKey: string) {
     timestamp: lead.timestamp instanceof Date ? lead.timestamp.toISOString() : lead.timestamp,
     place_id: lead.placeId ?? null, country: lead.country ?? null,
     city: lead.city ?? null, search_key: searchKey,
+    serial_number: lead.serialNumber ?? null,
   };
 }
 
@@ -41,6 +42,7 @@ function fromRow(row: Record<string, unknown>): Lead {
     notes: row.notes as string | undefined,
     deliveryUrl: row.delivery_url as string | undefined,
     timestamp: new Date(row.timestamp as string),
+    serialNumber: row.serial_number as number | undefined,
     placeId: row.place_id as string | undefined,
     country: row.country as string | undefined,
     city: row.city as string | undefined,
@@ -93,6 +95,14 @@ export async function sb_saveLeads(leads: Lead[], searchKey: string): Promise<vo
   const rows = leads.map(l => toRow(l, searchKey));
   const { error } = await supabase.from('leads').upsert(rows);
   if (error) throw new Error(`${error.message}${error.details ? ` | ${error.details}` : ''}${error.hint ? ` | تلميح: ${error.hint}` : ''}`);
+}
+
+export async function sb_getMaxSerial(): Promise<number> {
+  const { data } = await supabase.from('leads')
+    .select('serial_number')
+    .order('serial_number', { ascending: false })
+    .limit(1);
+  return (data?.[0]?.serial_number as number) ?? 0;
 }
 
 export async function sb_getLeadsBySearchKey(searchKey: string): Promise<Lead[]> {

@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Users, MapPin, Globe2, ChevronDown, Trash2, RefreshCw, AlertCircle, FolderOpen } from 'lucide-react';
+import { Users, MapPin, Globe2, ChevronDown, Trash2, RefreshCw, AlertCircle, FolderOpen, Hash } from 'lucide-react';
 import type { Lead } from '../types';
 import type { SavedSearch } from '../utils/storage-engine';
 import { LeadCard } from './LeadCard';
@@ -55,6 +55,7 @@ export function OperationsPanel({ leads, history, onUpdate, onSendTelegram, onOp
   const [deleting, setDeleting]               = useState<string | null>(null);
   const [confirmKey, setConfirmKey]           = useState<string | null>(null);
   const [showHistory, setShowHistory]         = useState(false);
+  const [serialSearch, setSerialSearch]       = useState('');
 
   /* ── بناء قوائم الدول والمدن ── */
   const countries = useMemo(() =>
@@ -68,12 +69,17 @@ export function OperationsPanel({ leads, history, onUpdate, onSendTelegram, onOp
 
   /* ── تطبيق الفلاتر ── */
   const filtered = useMemo(() => {
+    const serial = serialSearch.replace('#', '').trim();
     return leads.filter(l => {
+      if (serial) {
+        const num = parseInt(serial, 10);
+        return !isNaN(num) && l.serialNumber === num;
+      }
       if (selectedCountry !== 'all' && l.country !== selectedCountry) return false;
       if (selectedCity    !== 'all' && l.city    !== selectedCity)    return false;
       return matchesStatus(l, statusFilter);
     });
-  }, [leads, selectedCountry, selectedCity, statusFilter]);
+  }, [leads, selectedCountry, selectedCity, statusFilter, serialSearch]);
 
   /* ── تجميع النتائج حسب المدينة ── */
   const grouped = useMemo(() => {
@@ -128,6 +134,21 @@ export function OperationsPanel({ leads, history, onUpdate, onSendTelegram, onOp
         ))}
       </div>
 
+      {/* ══ بحث سريع بالرقم التسلسلي ══ */}
+      <div style={{ position: 'relative', marginBottom: 10 }}>
+        <Hash size={13} color="#94a3b8" style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+        <input
+          type="number"
+          value={serialSearch}
+          onChange={e => setSerialSearch(e.target.value)}
+          placeholder="بحث برقم المنشأة... مثال: 42"
+          style={{ width: '100%', background: 'white', border: `1.5px solid ${serialSearch ? '#2563eb' : '#e2e8f0'}`, borderRadius: 10, padding: '8px 32px 8px 12px', fontSize: 12, color: '#0f172a', outline: 'none', boxSizing: 'border-box', transition: 'border-color 0.2s', direction: 'rtl' }}
+        />
+        {serialSearch && (
+          <button onClick={() => setSerialSearch('')} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: 16, lineHeight: 1, padding: 2 }}>×</button>
+        )}
+      </div>
+
       {/* ══ فلاتر الحالة (chips) ══ */}
       <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2, marginBottom: 10, scrollbarWidth: 'none' }}>
         {STATUS_FILTERS.map(f => {
@@ -179,8 +200,8 @@ export function OperationsPanel({ leads, history, onUpdate, onSendTelegram, onOp
             ? `عرض جميع المنشآت (${leads.length})`
             : `${filtered.length} من ${leads.length} منشأة`}
         </span>
-        {(selectedCountry !== 'all' || selectedCity !== 'all' || statusFilter !== 'all') && (
-          <button onClick={() => { setSelectedCountry('all'); setSelectedCity('all'); setStatusFilter('all'); }}
+        {(selectedCountry !== 'all' || selectedCity !== 'all' || statusFilter !== 'all' || serialSearch) && (
+          <button onClick={() => { setSelectedCountry('all'); setSelectedCity('all'); setStatusFilter('all'); setSerialSearch(''); }}
             style={{ fontSize: 11, color: '#ef4444', background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: 8, padding: '3px 10px', cursor: 'pointer' }}>
             ✕ مسح الفلاتر
           </button>

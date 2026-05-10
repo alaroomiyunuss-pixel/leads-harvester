@@ -187,6 +187,14 @@ export function LeadCard({ lead, onUpdate, onSendTelegram, onOpenReviews }: Lead
 
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+          {/* الرقم التسلسلي */}
+          {lead.serialNumber && (
+            <div style={{ flexShrink: 0, minWidth: 32, height: 32, borderRadius: 9, background: 'linear-gradient(135deg,#2563eb,#1d4ed8)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 6px rgba(37,99,235,0.3)' }}>
+              <span style={{ color: 'white', fontSize: 11, fontWeight: 800, lineHeight: 1 }}>
+                #{lead.serialNumber}
+              </span>
+            </div>
+          )}
           <div style={{ flex: 1, minWidth: 0 }}>
             <h3 style={{ color: '#0f172a', fontWeight: 700, fontSize: 14, margin: 0 }}>{lead.name}</h3>
             {lead.category && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: '#94a3b8', fontSize: 11, marginTop: 2 }}><Tag size={9} />{lead.category}</span>}

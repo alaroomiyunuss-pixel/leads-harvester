@@ -166,6 +166,20 @@ export async function getAllLeadsFromDB(): Promise<Lead[]> {
   });
 }
 
+export async function getMaxSerialFromDB(): Promise<number> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const req = tx(db, 'leads').objectStore('leads').getAll();
+    req.onsuccess = () => {
+      const serials = (req.result as StoredLead[])
+        .map(l => (l as unknown as { serialNumber?: number }).serialNumber ?? 0)
+        .filter(n => n > 0);
+      resolve(serials.length ? Math.max(...serials) : 0);
+    };
+    req.onerror = () => reject(req.error);
+  });
+}
+
 /* دالة خاصة للـ migration — تُرجع البيانات الكاملة مع searchKey */
 export async function getAllLeadsRawFromDB(): Promise<StoredLead[]> {
   const db = await openDB();
