@@ -7,6 +7,7 @@ import {
   sb_hasSearch, sb_saveSearchRecord, sb_saveLeads,
   sb_getLeadsBySearchKey, sb_getAllLeads, sb_updateLead,
   sb_clearAll, sb_getSearchHistory, sb_deleteSearch,
+  sb_getSearchRecord,
 } from './supabase';
 import {
   makeSearchKey as _mk,
@@ -17,6 +18,7 @@ import {
   getSearchHistoryFromDB as idb_getHistory,
   deleteSearchRecordFromDB as idb_deleteSearch,
   getAllLeadsRawFromDB,
+  getSearchRecordFromDB as idb_getSearchRecord,
 } from './db';
 import type { SavedSearch } from './db';
 
@@ -52,7 +54,7 @@ export async function hasSearch(key: string): Promise<boolean> {
 
 export async function saveSearchRecord(
   key: string, count: number,
-  meta: { query: string; countryCode: string; countryAr: string; cityAr: string; cityEn: string }
+  meta: { query: string; countryCode: string; countryAr: string; cityAr: string; cityEn: string; maxRadius: number }
 ): Promise<void> {
   // دائماً احفظ محلياً أولاً (ضمان الاستمرارية عند التحديث)
   await idb_saveSR(key, count, meta);
@@ -73,6 +75,33 @@ export async function saveLeads(leads: Lead[], key: string, country: string, cit
 
 export async function getLeadsBySearchKey(key: string): Promise<Lead[]> {
   return trySupabase(() => sb_getLeadsBySearchKey(key), () => idb_get(key));
+}
+
+/** يجمع نتائج البحث من Supabase + IndexedDB بدون تكرار */
+export async function getLeadsBySearchKeyMerged(key: string): Promise<Lead[]> {
+  const [cloudResult, localResult] = await Promise.allSettled([
+    sb_getLeadsBySearchKey(key),
+    idb_get(key),
+  ]);
+  const cloud = cloudResult.status === 'fulfilled' ? cloudResult.value : [];
+  const local = localResult.status === 'fulfilled' ? localResult.value : [];
+  const cloudIds = new Set(cloud.map(l => l.id));
+  return [...cloud, ...local.filter(l => !cloudIds.has(l.id))];
+}
+
+/** يجلب سجل بحث محدد من أي مصدر متاح */
+export async function getSearchRecord(key: string): Promise<SavedSearch | null> {
+  const [cloudResult, localResult] = await Promise.allSettled([
+    _useSupabase ? sb_getSearchRecord(key) : Promise.resolve(null),
+    idb_getSearchRecord(key),
+  ]);
+  const cloud = cloudResult.status === 'fulfilled' ? cloudResult.value : null;
+  const local = localResult.status === 'fulfilled' ? localResult.value : null;
+  // أعِد السجل الأكبر نطاقاً (الأشمل)
+  if (cloud && local) {
+    return (cloud.maxRadius ?? 0) >= (local.maxRadius ?? 0) ? cloud : local;
+  }
+  return cloud ?? local;
 }
 
 export async function getAllLeads(): Promise<Lead[]> {
@@ -195,6 +224,7 @@ export async function migrateLocalToCloud(
     await sb_saveSearchRecord(s.searchKey, s.count, {
       query: s.query, countryCode: s.countryCode,
       countryAr: s.countryAr, cityAr: s.cityAr, cityEn: s.cityEn,
+      maxRadius: s.maxRadius ?? 0,
     }).catch(() => {});
   }
 

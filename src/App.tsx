@@ -7,9 +7,10 @@ import { searchPlaces } from './utils/googleMaps';
 import { sendToTelegram, sendBulkToTelegram } from './utils/telegram';
 import {
   makeSearchKey, storageEngine,
-  hasSearch, saveSearchRecord, saveLeads,
+  saveSearchRecord, saveLeads,
   getAllLeadsMerged, updateLead, clearAll,
-  getSearchHistoryMerged, getSearchHistory, deleteSearchRecord,
+  getSearchHistoryMerged, deleteSearchRecord,
+  getLeadsBySearchKeyMerged, getSearchRecord,
 } from './utils/storage-engine';
 import type { SavedSearch } from './utils/storage-engine';
 import { SearchPanel }      from './components/SearchPanel';
@@ -68,40 +69,76 @@ export default function App() {
     return [...incoming.filter(l => !ids.has(l.id)), ...prev];
   }
 
-  /* ── بحث جديد ── */
+  /* ── بحث جديد — Cache ذكي بالنطاق ── */
   async function handleSearch(params: SearchParams) {
     const { countryCode, countryAr, cityAr, cityEn } = params;
-    const searchKey = makeSearchKey(params.query, countryCode, cityEn, params.maxResults, params.radius);
+    /* المفتاح: مجال + دولة + مدينة فقط (بدون نطاق) */
+    const searchKey = makeSearchKey(params.query, countryCode, cityEn);
     setIsLoading(true); setError(''); setSearchInfo(''); setTab('dashboard');
+
     try {
-      /* مخبَّأ سابقاً؟ حمّله فوراً */
-      if (await hasSearch(searchKey)) {
-        setSearchInfo('⚡ مُحمَّل من الذاكرة — لا استدعاء API');
-        const cached = await getLeadsBySearchKey_local(searchKey);
+      /* ── اجلب ما هو محفوظ لهذا المجال+المدينة ── */
+      const [cached, record] = await Promise.all([
+        getLeadsBySearchKeyMerged(searchKey),
+        getSearchRecord(searchKey),
+      ]);
+      const prevMaxRadius = record?.maxRadius ?? 0;
+
+      /* ── حالة 1: مخبَّأ بالكامل (نطاق جديد ≤ نطاق محفوظ) ── */
+      if (cached.length > 0 && params.radius <= prevMaxRadius) {
         setLeads(prev => mergeLeads(cached, prev));
+        setSearchInfo(
+          `⚡ من الذاكرة — ${cached.length} نتيجة (نطاق ${prevMaxRadius / 1000} كم مُحمَّل سابقاً)`
+        );
+        setIsLoading(false);
         return;
       }
 
-      /* استخراج جديد من Google */
+      /* ── حالة 2: نطاق أكبر أو بحث جديد كلياً ── */
+      const isExpanding = cached.length > 0 && params.radius > prevMaxRadius;
+
+      /* استدعاء Google API */
       const found = await searchPlaces(params, settings.googleApiKey);
 
-      /* dedup عبر جميع البحوث السابقة */
-      const existingIds = new Set(leads.map(l => l.id));
-      const brandNew    = found.filter(l => !existingIds.has(l.id));
-      const dupCount    = found.length - brandNew.length;
+      /* حذف ما تم استخراجه مسبقاً لنفس المجال+المدينة */
+      const cachedPlaceIds = new Set(
+        cached.map(l => l.placeId).filter(Boolean) as string[]
+      );
+      const brandNew = found.filter(
+        l => !cachedPlaceIds.has(l.placeId ?? '') && !cachedPlaceIds.has(l.id)
+      );
+      const dupCount = found.length - brandNew.length;
 
-      /* حفظ (upsert — لا تكرار في قاعدة البيانات) */
-      await saveLeads(found, searchKey, countryCode, cityAr);
-      await saveSearchRecord(searchKey, found.length, { query: params.query, countryCode, countryAr, cityAr, cityEn });
+      /* احفظ فقط الجديد */
+      if (brandNew.length > 0) {
+        await saveLeads(brandNew, searchKey, countryCode, cityAr);
+      }
+
+      /* حدّث سجل البحث (زِد العدد + حدّث أقصى نطاق) */
+      const newTotal = cached.length + brandNew.length;
+      await saveSearchRecord(searchKey, newTotal, {
+        query: params.query, countryCode, countryAr, cityAr, cityEn,
+        maxRadius: Math.max(prevMaxRadius, params.radius),
+      });
+
       getSearchHistoryMerged().then(h => setSearchHistory(h)).catch(() => {});
 
-      /* تحديث الواجهة */
-      setLeads(prev => mergeLeads(brandNew, prev));
+      /* ادمج القديم + الجديد في الواجهة */
+      setLeads(prev => mergeLeads([...cached, ...brandNew], prev));
 
-      if (dupCount > 0) {
-        setSearchInfo(`✅ ${brandNew.length} عميل جديد | ⏭ ${dupCount} موجود مسبقاً — تم تجاهله`);
+      if (isExpanding) {
+        setSearchInfo(
+          `🔍 توسيع النطاق ${prevMaxRadius / 1000}→${params.radius / 1000} كم` +
+          ` | ✅ ${brandNew.length} جديد` +
+          (dupCount > 0 ? ` | ⏭ ${dupCount} موجود مسبقاً` : '')
+        );
+      } else if (brandNew.length === 0) {
+        setSearchInfo(`⚡ كل النتائج موجودة مسبقاً — ${cached.length} نتيجة محفوظة`);
       } else {
-        setSearchInfo(`✅ ${brandNew.length} عميل جديد مُضاف`);
+        setSearchInfo(
+          `✅ ${brandNew.length} عميل جديد` +
+          (dupCount > 0 ? ` | ⏭ ${dupCount} موجود` : '')
+        );
       }
 
     } catch (err) {
@@ -113,9 +150,9 @@ export default function App() {
   async function handleDeleteSearch(searchKey: string) {
     await deleteSearchRecord(searchKey);
     setSearchHistory(prev => prev.filter(s => s.searchKey !== searchKey));
-    getAllLeadsMerged().then(rows =>
-      setLeads(rows.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()))
-    ).catch(() => {});
+    getAllLeadsMerged().then(rows => {
+      setLeads(rows.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
+    }).catch(() => {});
   }
 
   async function handleUpdate(id: string, updates: Partial<Lead>) {
@@ -325,5 +362,3 @@ export default function App() {
   );
 }
 
-/* helper محلي لتجنب circular import */
-import { getLeadsBySearchKey as getLeadsBySearchKey_local } from './utils/storage-engine';

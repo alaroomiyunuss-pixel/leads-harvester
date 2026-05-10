@@ -57,17 +57,32 @@ export async function sb_hasSearch(searchKey: string): Promise<boolean> {
 }
 
 export async function sb_saveSearchRecord(key: string, count: number, meta: Omit<SavedSearch, 'searchKey' | 'count' | 'timestamp'>): Promise<void> {
-  const { error } = await supabase.from('searches').upsert({ search_key: key, count, timestamp: Date.now(), query: meta.query, country_code: meta.countryCode, country_ar: meta.countryAr, city_ar: meta.cityAr, city_en: meta.cityEn });
+  const { error } = await supabase.from('searches').upsert({
+    search_key: key, count, timestamp: Date.now(),
+    query: meta.query, country_code: meta.countryCode, country_ar: meta.countryAr,
+    city_ar: meta.cityAr, city_en: meta.cityEn, max_radius: meta.maxRadius ?? 0,
+  });
   if (error) throw error;
+}
+
+function rowToSavedSearch(r: Record<string, unknown>): SavedSearch {
+  return {
+    searchKey: r.search_key as string, query: r.query as string,
+    countryCode: r.country_code as string, countryAr: r.country_ar as string,
+    cityAr: r.city_ar as string, cityEn: r.city_en as string,
+    count: r.count as number, maxRadius: (r.max_radius as number) ?? 0,
+    timestamp: r.timestamp as number,
+  };
 }
 
 export async function sb_getSearchHistory(): Promise<SavedSearch[]> {
   const { data } = await supabase.from('searches').select('*').order('timestamp', { ascending: false });
-  return (data ?? []).map(r => ({
-    searchKey: r.search_key, query: r.query, countryCode: r.country_code,
-    countryAr: r.country_ar, cityAr: r.city_ar, cityEn: r.city_en,
-    count: r.count, timestamp: r.timestamp,
-  }));
+  return (data ?? []).map(rowToSavedSearch);
+}
+
+export async function sb_getSearchRecord(searchKey: string): Promise<SavedSearch | null> {
+  const { data } = await supabase.from('searches').select('*').eq('search_key', searchKey).maybeSingle();
+  return data ? rowToSavedSearch(data as Record<string, unknown>) : null;
 }
 
 export async function sb_deleteSearch(searchKey: string): Promise<void> {

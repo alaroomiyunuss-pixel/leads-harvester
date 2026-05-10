@@ -13,6 +13,7 @@ export interface SavedSearch {
   cityAr: string;
   cityEn: string;
   count: number;
+  maxRadius: number;   // أكبر نطاق تم البحث فيه لهذه العملية
   timestamp: number;
 }
 
@@ -45,16 +46,18 @@ function tx(
   return db.transaction(stores, mode);
 }
 
+/**
+ * مفتاح البحث — يعتمد فقط على (المجال + الدولة + المدينة)
+ * بدون radius أو maxResults لأن الـ Cache يعمل على أساس
+ * "نفس المجال في نفس المدينة = نفس العملية بغض النظر عن النطاق"
+ */
 export function makeSearchKey(
   query: string, countryCode: string, cityEn: string,
-  maxResults: number, radius: number
 ): string {
   return [
     query.trim().toLowerCase(),
     countryCode.toLowerCase(),
     cityEn.trim().toLowerCase(),
-    maxResults,
-    radius,
   ].join('|');
 }
 
@@ -70,7 +73,7 @@ export async function hasSearch(searchKey: string): Promise<boolean> {
 export async function saveSearchRecord(
   searchKey: string,
   count: number,
-  meta: { query: string; countryCode: string; countryAr: string; cityAr: string; cityEn: string }
+  meta: { query: string; countryCode: string; countryAr: string; cityAr: string; cityEn: string; maxRadius: number }
 ): Promise<void> {
   const db = await openDB();
   return new Promise((resolve, reject) => {
@@ -78,6 +81,15 @@ export async function saveSearchRecord(
     t.objectStore('searches').put({ searchKey, count, timestamp: Date.now(), ...meta });
     t.oncomplete = () => resolve();
     t.onerror = () => reject(t.error);
+  });
+}
+
+export async function getSearchRecordFromDB(searchKey: string): Promise<SavedSearch | null> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const req = tx(db, 'searches').objectStore('searches').get(searchKey);
+    req.onsuccess = () => resolve((req.result as SavedSearch) ?? null);
+    req.onerror = () => reject(req.error);
   });
 }
 
