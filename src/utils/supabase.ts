@@ -62,7 +62,7 @@ export async function sb_saveSearchRecord(key: string, count: number, meta: Omit
     query: meta.query, country_code: meta.countryCode, country_ar: meta.countryAr,
     city_ar: meta.cityAr, city_en: meta.cityEn, max_radius: meta.maxRadius ?? 0,
   });
-  if (error) throw error;
+  if (error) throw new Error(`${error.message}${error.details ? ` | ${error.details}` : ''}${error.hint ? ` | تلميح: ${error.hint}` : ''}`);
 }
 
 function rowToSavedSearch(r: Record<string, unknown>): SavedSearch {
@@ -95,7 +95,7 @@ export async function sb_saveLeads(leads: Lead[], searchKey: string): Promise<vo
   if (!leads.length) return;
   const rows = leads.map(l => toRow(l, searchKey));
   const { error } = await supabase.from('leads').upsert(rows);
-  if (error) throw error;
+  if (error) throw new Error(`${error.message}${error.details ? ` | ${error.details}` : ''}${error.hint ? ` | تلميح: ${error.hint}` : ''}`);
 }
 
 export async function sb_getLeadsBySearchKey(searchKey: string): Promise<Lead[]> {

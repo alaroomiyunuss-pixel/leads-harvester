@@ -211,7 +211,12 @@ export async function migrateLocalToCloud(
     try {
       await sb_saveLeads(leads as Lead[], key);
     } catch (e) {
-      firstError = firstError ?? (e instanceof Error ? e.message : String(e));
+      const msg = e instanceof Error
+        ? e.message
+        : (typeof e === 'object' && e !== null)
+          ? JSON.stringify(e)
+          : String(e);
+      firstError = firstError ?? msg;
     }
     done += leads.length;
     onProgress?.(done, newLeads.length, `جارٍ رفع العملاء... (${done}/${newLeads.length})`);
