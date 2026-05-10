@@ -246,9 +246,10 @@ export async function migrateLocalToCloud(
   // Map من searchKey → بيانات البحث
   const searchMap = new Map(localSearches.map(s => [s.searchKey, s]));
 
-  for (const key of keysInLeads) {
+  // ارفع جميع سجلات البحث (المرتبطة بعملاء + الأخرى)
+  const allSearchKeys = new Set([...keysInLeads, ...localSearches.map(s => s.searchKey)]);
+  for (const key of allSearchKeys) {
     const s = searchMap.get(key);
-    // هذه الـ search records ضرورية (FK) — لا نبلع خطأها
     await sb_saveSearchRecord(
       key,
       s?.count ?? 0,
@@ -260,18 +261,7 @@ export async function migrateLocalToCloud(
         cityEn:      s?.cityEn      ?? key.split('|')[2] ?? '',
         maxRadius:   s?.maxRadius   ?? 0,
       }
-    );
-  }
-
-  // ارفع بقية السجلات (غير المرتبطة بعملاء جدد) — اختيارية
-  for (const s of localSearches) {
-    if (!keysInLeads.has(s.searchKey)) {
-      await sb_saveSearchRecord(s.searchKey, s.count, {
-        query: s.query, countryCode: s.countryCode,
-        countryAr: s.countryAr, cityAr: s.cityAr, cityEn: s.cityEn,
-        maxRadius: s.maxRadius ?? 0,
-      }).catch(() => {});
-    }
+    ).catch(() => {/* موجود مسبقاً أو خطأ غير حرج */});
   }
 
   /* ══ الخطوة 2: ارفع العملاء (بعد وجود الـ search keys) ══ */
