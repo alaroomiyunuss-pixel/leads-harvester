@@ -94,7 +94,16 @@ export async function sb_saveLeads(leads: Lead[], searchKey: string): Promise<vo
   if (!leads.length) return;
   const rows = leads.map(l => toRow(l, searchKey));
   const { error } = await supabase.from('leads').upsert(rows);
-  if (error) throw new Error(`${error.message}${error.details ? ` | ${error.details}` : ''}${error.hint ? ` | تلميح: ${error.hint}` : ''}`);
+  if (error) {
+    // إذا كان الخطأ بسبب عمود غير موجود (serial_number) → أعد المحاولة بدونه
+    if (error.message?.includes('serial_number') || error.message?.includes('schema cache')) {
+      const rowsWithout = rows.map(({ serial_number: _s, ...rest }) => rest);
+      const { error: e2 } = await supabase.from('leads').upsert(rowsWithout);
+      if (e2) throw new Error(`${e2.message}${e2.details ? ` | ${e2.details}` : ''}`);
+      return;
+    }
+    throw new Error(`${error.message}${error.details ? ` | ${error.details}` : ''}${error.hint ? ` | تلميح: ${error.hint}` : ''}`);
+  }
 }
 
 export async function sb_getMaxSerial(): Promise<number> {
