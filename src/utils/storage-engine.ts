@@ -248,21 +248,22 @@ export async function migrateLocalToCloud(
 
   for (const key of keysInLeads) {
     const s = searchMap.get(key);
+    // هذه الـ search records ضرورية (FK) — لا نبلع خطأها
     await sb_saveSearchRecord(
       key,
       s?.count ?? 0,
       {
-        query:       s?.query      ?? key.split('|')[0] ?? key,
+        query:       s?.query       ?? key.split('|')[0] ?? key,
         countryCode: s?.countryCode ?? key.split('|')[1] ?? '',
-        countryAr:   s?.countryAr  ?? '',
-        cityAr:      s?.cityAr     ?? key.split('|')[2] ?? '',
-        cityEn:      s?.cityEn     ?? key.split('|')[2] ?? '',
-        maxRadius:   s?.maxRadius  ?? 0,
+        countryAr:   s?.countryAr   ?? '',
+        cityAr:      s?.cityAr      ?? key.split('|')[2] ?? '',
+        cityEn:      s?.cityEn      ?? key.split('|')[2] ?? '',
+        maxRadius:   s?.maxRadius   ?? 0,
       }
-    ).catch(() => {/* تجاهل — ربما موجود مسبقاً */});
+    );
   }
 
-  // ارفع بقية السجلات (غير المرتبطة بعملاء جدد)
+  // ارفع بقية السجلات (غير المرتبطة بعملاء جدد) — اختيارية
   for (const s of localSearches) {
     if (!keysInLeads.has(s.searchKey)) {
       await sb_saveSearchRecord(s.searchKey, s.count, {

@@ -56,12 +56,22 @@ export async function sb_hasSearch(searchKey: string): Promise<boolean> {
 }
 
 export async function sb_saveSearchRecord(key: string, count: number, meta: Omit<SavedSearch, 'searchKey' | 'count' | 'timestamp'>): Promise<void> {
-  const { error } = await supabase.from('searches').upsert({
+  const row = {
     search_key: key, count, timestamp: Date.now(),
     query: meta.query, country_code: meta.countryCode, country_ar: meta.countryAr,
     city_ar: meta.cityAr, city_en: meta.cityEn, max_radius: meta.maxRadius ?? 0,
-  });
-  if (error) throw new Error(`${error.message}${error.details ? ` | ${error.details}` : ''}${error.hint ? ` | تلميح: ${error.hint}` : ''}`);
+  };
+  const { error } = await supabase.from('searches').upsert(row);
+  if (error) {
+    // إذا كان الخطأ بسبب عمود max_radius غير موجود → أعد المحاولة بدونه
+    if (error.message?.includes('max_radius') || error.message?.includes('schema cache')) {
+      const { max_radius: _mr, ...rowWithout } = row;
+      const { error: e2 } = await supabase.from('searches').upsert(rowWithout);
+      if (e2) throw new Error(`${e2.message}${e2.details ? ` | ${e2.details}` : ''}`);
+      return;
+    }
+    throw new Error(`${error.message}${error.details ? ` | ${error.details}` : ''}${error.hint ? ` | تلميح: ${error.hint}` : ''}`);
+  }
 }
 
 function rowToSavedSearch(r: Record<string, unknown>): SavedSearch {
